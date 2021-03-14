@@ -13,4 +13,5 @@ layoff [layout ID] …
   Unloads listed layout IDs. Layout IDs must be hexadecimal numbers
   prefixed with 0x. Defaults to "0x0809 0x0409".
 
-Launch without arguments to use the default layout list.```
+Launch without arguments to use the default layout list.
+```
