@@ -28,11 +28,10 @@ namespace LayOff
 				Console.WriteLine(
 					"Syntax:\n\n" +
 					"layoff /?\n" +
-					"  Shows this help message" +
+					"  Shows this help message\n\n" +
 					"layoff [layout ID] …\n" +
 					"  Unloads listed layout IDs. Layout IDs must be hexadecimal numbers\n" +
-					"  prefixed with 0x.\n" +
-					"  Defaults to \"0x0809 0x0409\".\n\n" +
+					"  prefixed with 0x. Defaults to \"0x0809 0x0409\".\n\n" +
 					"Launch without arguments to use the default layout list."
 					);
 				return false;
