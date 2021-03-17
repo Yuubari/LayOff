@@ -4,14 +4,22 @@ Your local HR Department for Windows 10 keyboard layouts. Removes specified keyb
 ## Command Line Syntax
 ```
 C:\Users\Yuubari> layoff /?
+Unloads keyboard layouts.
+
 Syntax:
 
 layoff /?
-  Shows this help message
+  Shows this help message.
 
-layoff [layout ID] …
+layoff /L
+  Lists layouts currently present.
+
+layoff ID …
   Unloads listed layout IDs. Layout IDs must be hexadecimal numbers
-  prefixed with 0x. Defaults to "0x0809 0x0409".
+  prefixed with 0x. Four-digit IDs are treated as language IDs, and
+  all layouts related to that language ID are unloaded.
 
-Launch without arguments to use the default layout list.
+layoff
+  Unloads layouts associated with US English and UK English; equals
+  to "layoff 0x0809 0x0409".
 ```
