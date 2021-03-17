@@ -8,29 +8,100 @@ using System.Threading.Tasks;
 
 namespace LayOff
 {
-	public class KeyboardLayout
+	public class KeyboardLayout : IEquatable<KeyboardLayout>
 	{
-		public UInt32 Id { get; }
+		public uint Id { get; }
+		public bool MatchLanguage { get; }
+		public ushort LanguageId { get; }
+		public ushort KeyboardId { get; }
+		public string LanguageName { get; }
+		public string KeyboardName { get; }
 
-		public UInt16 LanguageId { get; }
-		public UInt16 KeyboardId { get; }
-
-		public String LanguageName { get; }
-		public String KeyboardName { get; }
-
-		internal KeyboardLayout(UInt32 id, UInt16 languageId, UInt16 keyboardId, String languageName, String keyboardName)
+		internal KeyboardLayout(uint id, bool lang = false)
 		{
-			this.Id = id;
-			this.LanguageId = languageId;
-			this.KeyboardId = keyboardId;
-			this.LanguageName = languageName;
-			this.KeyboardName = keyboardName;
+			Id = id;
+
+			MatchLanguage = (id >> 16) == 0;
+
+			LanguageId = (ushort)(id & 0xFFFF);
+			LanguageName = GetCultureInfoName(LanguageId);
+
+			if (!MatchLanguage)
+			{
+				KeyboardId = (ushort)(id >> 16);
+				KeyboardName = GetCultureInfoName(KeyboardId);
+			}
+		}
+
+		private string GetCultureInfoName(ushort cultureId)
+		{
+			try
+			{
+				return CultureInfo.GetCultureInfo(cultureId).DisplayName;
+			}
+			catch (CultureNotFoundException)
+			{
+				return "Unknown";
+			}
+		}
+
+		public bool Equals(KeyboardLayout other)
+		{
+			return Id == other.Id;
+		}
+
+		public override string ToString()
+		{
+			return string.Format("0x" + (MatchLanguage ? "{0:X4} (by language ID)" : "{0:X8}"), Id);
+		}
+
+		public void PrintLayoutInfo()
+		{
+			Console.Write("  ID ");
+			Console.ForegroundColor = ConsoleColor.White;
+			Console.Write(this.ToString());
+			Console.ResetColor();
+			Console.WriteLine(":");
+			Console.WriteLine(
+				"    Language: {0} (0x{1:X4})",
+				LanguageName,
+				LanguageId);
+			if (!MatchLanguage)
+			{
+				Console.WriteLine(
+					"    Layout:   {0} (0x{1:X4})",
+					KeyboardName,
+					KeyboardId);
+			}
 		}
 	}
 
 	class Program
 	{
-		private static List<uint> layoutList = new List<uint> { 0x0809, 0x0409 };
+		private static List<KeyboardLayout> layoutList = new List<KeyboardLayout> {
+			new KeyboardLayout(0x0809),
+			new KeyboardLayout(0x0409),
+		};
+
+		private const string syntax =
+@"Unloads keyboard layouts.
+
+Syntax:
+
+layoff /?
+  Shows this help message.
+
+layoff /L
+  Lists layouts currently present.
+
+layoff ID …
+  Unloads listed layout IDs. Layout IDs must be hexadecimal numbers
+  prefixed with 0x. Four-digit IDs are treated as language IDs, and
+  all layouts related to that language ID are unloaded.
+
+layoff
+  Unloads layouts associated with US English and UK English; equals
+  to ""layoff 0x0809 0x0409"".";
 
 		[DllImport("user32.dll")]
 		private static extern uint GetKeyboardLayoutList(int nBuff, IntPtr[] lpList);
@@ -38,112 +109,76 @@ namespace LayOff
 		[DllImport("user32.dll")]
 		private static extern bool UnloadKeyboardLayout(uint hkl);
 
-		private static KeyboardLayout CreateKeyboardLayout(UInt32 keyboardLayoutId)
-		{
-			var languageId = (UInt16)(keyboardLayoutId & 0xFFFF);
-			var keyboardId = (UInt16)(keyboardLayoutId >> 16);
-
-			return new KeyboardLayout(keyboardLayoutId, languageId, keyboardId, GetCultureInfoName(languageId), GetCultureInfoName(keyboardId));
-
-			String GetCultureInfoName(UInt16 cultureId)
-			{
-				String dName;
-				try
-				{
-					dName = CultureInfo.GetCultureInfo(cultureId).DisplayName;
-				}
-				catch (CultureNotFoundException) {
-					return "N/A";
-				}
-
-				return dName;
-			}
-		}
-
 		static bool ArgumentParser(string[] args)
 		{
-			if (args.Length == 0)
+			if (args.Length > 0)
 			{
-				return true;
-			}
-
-			if (args[0].Equals("/?"))
-			{
-				Console.WriteLine(
-					"Syntax:\n\n" +
-					"layoff /?\n" +
-					"  Shows this help message\n\n" +
-					"layoff /L\n" +
-					"  Lists layouts currently present\n\n" +
-					"layoff [layout ID] …\n" +
-					"  Unloads listed layout IDs. Layout IDs must be hexadecimal numbers\n" +
-					"  prefixed with 0x. Defaults to \"0x0809 0x0409\".\n\n" +
-					"Launch without arguments to use the default layout list."
-					);
-				return false;
-			}
-
-			if (args[0].Equals("/L", StringComparison.OrdinalIgnoreCase))
-			{
-				// List currently active layouts
-
-				List<uint> klList;
-
-				if (GetLayouts(out klList) > 0)
+				switch (args[0].ToLower())
 				{
-					Console.WriteLine("Currently installed layouts:\n");
+					case "/?":
+						Console.WriteLine(syntax);
+						return false;
+
+					case "/l":
+						List<KeyboardLayout> klList;
+
+						if (GetLayouts(out klList) > 0)
+						{
+							Console.WriteLine("Currently installed layouts:\n");
+						}
+
+						foreach (var kbLayout in klList)
+						{
+							kbLayout.PrintLayoutInfo();
+							Console.WriteLine();
+						}
+
+						return false;
 				}
 
-				foreach (var klId in klList)
+				List<KeyboardLayout> layoutsToUnload = new List<KeyboardLayout> { };
+
+				foreach (var arg in args)
 				{
-					var kbLayout = CreateKeyboardLayout(klId);
-					Console.Write("  ID ");
-					Console.ForegroundColor = ConsoleColor.White;
-					Console.Write("0x{0:X4}", kbLayout.KeyboardId);
-					Console.WriteLine(":");
-					Console.ResetColor();
-					Console.WriteLine(
-						"    Language: {0} (0x{1:X4})\n" +
-						"    Layout: {2} (0x{3:X8})\n\n",
-						kbLayout.LanguageName,
-						kbLayout.LanguageId,
-						kbLayout.KeyboardName,
-						klId);
-				}
-
-				return false;
-			}
-
-			List<uint> layoutsToUnload = new List<uint> { };
-
-			foreach (var arg in args)
-			{
-				var hexNumber = arg.Substring(2);
-				if (uint.TryParse(hexNumber, System.Globalization.NumberStyles.HexNumber, null, out uint layoutId))
-				{
-					if (!layoutsToUnload.Contains(layoutId))
+					try
 					{
-						layoutsToUnload.Add(layoutId & 0x0000ffff);
+						string hexNumber = arg.Substring(2);
+
+						if (uint.TryParse(hexNumber, NumberStyles.HexNumber, null, out uint layoutId))
+						{
+							var layout = new KeyboardLayout(layoutId);
+
+							if (!layoutsToUnload.Contains(layout))
+							{
+								layoutsToUnload.Add(layout);
+							}
+						}
+#if DEBUG
+						else
+						{
+							Console.WriteLine("Failed to parse: {0}", arg);
+						}
+#endif
+					}
+					catch (ArgumentOutOfRangeException)
+					{
+						continue;
 					}
 				}
-#if DEBUG
-				else
-				{
-					Console.WriteLine("Failed to parse: {0}", arg);
-				}
-#endif
-			}
 
-			if (layoutsToUnload.Count > 0)
-			{
-				layoutList = layoutsToUnload;
+				if (layoutsToUnload.Count > 0)
+				{
+					layoutList = layoutsToUnload;
+				}
+
 			}
 
 #if DEBUG
 			Console.WriteLine("Layouts to be laid off:");
-			foreach (var klId in layoutList)
+			foreach (var kbLayout in layoutList)
 			{
-				Console.WriteLine("  0x{0:X4}", klId);
+				kbLayout.PrintLayoutInfo();
+				Console.WriteLine();
 			}
 			Console.WriteLine();
 #endif
@@ -151,11 +186,11 @@ namespace LayOff
 			return true;
 		}
 
-		static private uint GetLayouts(out List<uint> klList)
+		static private uint GetLayouts(out List<KeyboardLayout> klList)
 		{
 			var klSize = GetKeyboardLayoutList(0, null);
 
-			klList = new List<uint> { };
+			klList = new List<KeyboardLayout> { };
 
 			if (klSize > 0)
 			{
@@ -164,7 +199,7 @@ namespace LayOff
 
 				foreach (var klId in klIds)
 				{
-					klList.Add((uint)klId);
+					klList.Add(new KeyboardLayout((uint)klId));
 				}
 			}
 
@@ -173,28 +208,25 @@ namespace LayOff
 
 		static int Main(string[] args)
 		{
-			if ((args.Length > 0) && !ArgumentParser(args))
+			if (!ArgumentParser(args))
 			{
 				return 2;
 			}
 
-			List<uint> klList;
-			if (GetLayouts(out klList) < 0)
+			if (GetLayouts(out List<KeyboardLayout> klList) < 0)
 			{
 				Console.WriteLine("No layouts at all, nothing to do.");
 				return 1;
 			}
 
-			foreach (var klId in klList)
+			foreach (var layout in klList)
 			{
-				var testId = klId & 0x0000ffff;
-
-				if (layoutList.Contains(testId))
+				if (layoutList.Contains(layout))
 				{
-					Console.WriteLine("Found a layout to lay off: 0x{0:X4} (system layout ID 0x{1:X8}).", testId, (uint)klId);
-					if (!UnloadKeyboardLayout(klId))
+					Console.WriteLine("Found a layout to lay off: {0}.", layout);
+					if (!UnloadKeyboardLayout(layout.Id))
 					{
-						Console.WriteLine("Failed to unload this layout.");
+						Console.WriteLine("Failed to unload {0}.", layout);
 					}
 				}
 			}
