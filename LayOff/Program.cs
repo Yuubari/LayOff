@@ -45,9 +45,12 @@ namespace LayOff
 			}
 		}
 
+		[DllImport("user32.dll")]
+		private static extern bool UnloadKeyboardLayout(uint hkl);
+
 		public bool Equals(KeyboardLayout other)
 		{
-			return Id == other.Id;
+			return MatchLanguage ? Id == (other.Id & 0xFFFF) : Id == other.Id;
 		}
 
 		public override string ToString()
@@ -73,6 +76,14 @@ namespace LayOff
 					KeyboardName,
 					KeyboardId);
 			}
+		}
+
+		public bool Unload()
+		{
+#if DEBUG
+			Console.WriteLine("Unloading {0}.", ToString());
+#endif
+			return UnloadKeyboardLayout(Id);
 		}
 	}
 
@@ -221,10 +232,13 @@ layoff
 
 			foreach (var layout in klList)
 			{
+#if DEBUG
+				layout.PrintLayoutInfo();
+#endif
 				if (layoutList.Contains(layout))
 				{
 					Console.WriteLine("Found a layout to lay off: {0}.", layout);
-					if (!UnloadKeyboardLayout(layout.Id))
+					if (!layout.Unload())
 					{
 						Console.WriteLine("Failed to unload {0}.", layout);
 					}
